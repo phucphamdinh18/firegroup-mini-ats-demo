@@ -1,0 +1,15 @@
+{
+  "name": "firegroup-mini-ats-read-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^182.0.0"
+  }
+}
