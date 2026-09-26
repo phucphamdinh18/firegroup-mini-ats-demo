@@ -1,10 +1,10 @@
 // One Dashboard screen inside the ATS. Real values come only from an authenticated
 // server response; there is deliberately no public Sheet URL or invented KPI data.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
+const createClient = window.supabase?.createClient;
 
 const $ = id => document.getElementById(id);
 const config = window.FIREGROUP_PILOT;
-const db = config?.supabaseUrl && config?.publishableKey
+const db = createClient && config?.supabaseUrl && config?.publishableKey
   ? createClient(config.supabaseUrl, config.publishableKey) : null;
 const sections = [
   ['overview', 'Executive Overview'],
