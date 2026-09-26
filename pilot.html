@@ -59,7 +59,7 @@
       async function refresh(){
         try{
           const {data:{user},error:authError}=await supabase.auth.getUser();
-          if(authError || !user){$('loggedOut').classList.remove('hidden');$('loggedIn').classList.add('hidden');return}
+          if(authError || !user){$('loggedOut').classList.remove('hidden');$('loggedIn').classList.add('hidden');info('Chưa đăng nhập. Bấm Đăng nhập bằng Google để tạo tài khoản thử.');return}
           $('loggedOut').classList.add('hidden');$('loggedIn').classList.remove('hidden');
           $('who').textContent=user.email||'Tài khoản chưa có email';
           const {data:found,error:readError}=await supabase.from('pilot_users').select('user_id,email,role,active').eq('user_id',user.id).maybeSingle();
