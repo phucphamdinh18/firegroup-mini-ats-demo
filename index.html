@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FireGroup Talent OS — Prototype</title>
+<script src="./supabase/pilot-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 <style>
@@ -13,6 +15,18 @@
   .candidate-card{cursor:grab}.candidate-card:active{cursor:grabbing}.dropzone.dragover{background:#eef2ff;border-color:#818cf8}
   .page{display:none}.page.active{display:block}.drawer{transform:translateX(105%);transition:transform .22s ease}.drawer.open{transform:translateX(0)}
   .modal{display:none}.modal.open{display:flex}.skeleton{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 37%,#f1f5f9 63%);background-size:400% 100%;animation:shimmer 1.2s ease infinite}@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+  #dashboard{background:linear-gradient(180deg,#e4f0ff 0,#f8fafc 430px);margin:-1rem;padding:1rem;border-radius:18px}
+  .dash-hero{background:linear-gradient(115deg,#111c39,#224da7 62%,#2f70db);border-radius:24px;color:white;padding:26px;margin-bottom:20px;box-shadow:0 20px 40px rgba(30,58,138,.16)}
+  .dash-hero p.text-slate-500,.dash-hero p.text-indigo-600{color:#dbeafe}
+  .dash-hero button{color:#1e40af}
+  .dash-hero .card{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.22);box-shadow:none}
+  .dash-hero .dash-filters{background:transparent;border:0;box-shadow:none;padding:0}
+  .dash-hero .dash-filters label{color:#dbeafe}.dash-hero .dash-filters select{background:rgba(255,255,255,.16);color:white;border-color:rgba(255,255,255,.28)}
+  .dash-hero .dash-filters select option{color:#0f172a;background:white}
+  #dashboardPanels .dash-kpi{position:relative;overflow:hidden;text-align:center;min-height:178px}
+  #dashboardPanels .dash-kpi::after{content:"";position:absolute;width:92px;height:92px;border-radius:50%;right:-30px;top:-32px;background:rgba(90,180,220,.13)}
+  #dashboardPanels .dash-kpi:nth-child(2n)::after{background:rgba(96,190,149,.16)}
+  #dashboardPanels .dash-kpi:nth-child(3n)::after{background:rgba(143,111,218,.14)}
 </style>
 </head>
 <body class="text-slate-900">
@@ -22,26 +36,36 @@
     <div class="px-3 py-4"><button onclick="focusGlobalSearch()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50"><i data-lucide="search" class="w-4"></i><span>Search</span><span class="ml-auto text-[11px] border rounded px-1.5 py-.5">⌘ K</span></button></div>
     <nav class="px-3 space-y-1 text-sm">
       <div class="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-[.14em] text-slate-400">TALENT</div>
-      <button class="nav active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl" data-page="candidates"><i data-lucide="users" class="w-4"></i>Candidates</button>
+      <button class="nav active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl" data-page="dashboard"><i data-lucide="layout-dashboard" class="w-4"></i>Dashboard</button>
+      <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="candidates"><i data-lucide="users" class="w-4"></i>Candidates</button>
       <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="applications"><i data-lucide="layers-3" class="w-4"></i>Applications</button>
       <div class="px-3 pt-5 pb-1 text-[10px] font-semibold tracking-[.14em] text-slate-400">HIRING</div>
       <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="jobs"><i data-lucide="briefcase-business" class="w-4"></i>Jobs</button>
       <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="pipeline"><i data-lucide="kanban-square" class="w-4"></i>Pipeline</button>
       <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="interviews"><i data-lucide="calendar-days" class="w-4"></i>Interviews</button>
       <button class="nav w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50" data-page="offers"><i data-lucide="badge-check" class="w-4"></i>Offers</button>
-      <div class="px-3 pt-5 pb-1 text-[10px] font-semibold tracking-[.14em] text-slate-400">ANALYTICS</div>
-      <button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50"><i data-lucide="chart-no-axes-combined" class="w-4"></i>Recruitment Dashboard<i data-lucide="external-link" class="w-3 ml-auto"></i></button>
     </nav>
     <div class="mt-auto p-3 border-t"><div class="flex items-center gap-3 p-2"><div class="w-9 h-9 rounded-full bg-slate-900 text-white grid place-items-center text-xs font-semibold">TA</div><div class="min-w-0"><div class="text-sm font-medium truncate">TA Demo</div><div class="text-xs text-slate-400">Recruiter · Admin</div></div><i data-lucide="chevrons-up-down" class="w-4 ml-auto text-slate-400"></i></div></div>
   </aside>
 
   <main class="lg:ml-[248px] flex-1 min-w-0">
-    <header class="h-16 bg-white/90 backdrop-blur border-b sticky top-0 z-20 px-4 md:px-7 flex items-center gap-4"><button class="lg:hidden p-2"><i data-lucide="menu"></i></button><div id="headerTitle" class="font-semibold">Candidates</div><div class="ml-auto flex items-center gap-2"><button class="p-2.5 rounded-xl border bg-white"><i data-lucide="bell" class="w-4"></i></button><button onclick="openAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl flex items-center gap-2"><i data-lucide="plus" class="w-4"></i><span class="hidden sm:inline">Add candidate</span></button></div></header>
+    <header class="h-16 bg-white/90 backdrop-blur border-b sticky top-0 z-20 px-4 md:px-7 flex items-center gap-4"><button class="lg:hidden p-2"><i data-lucide="menu"></i></button><div id="headerTitle" class="font-semibold">Dashboard</div><div class="ml-auto flex items-center gap-2"><button class="p-2.5 rounded-xl border bg-white"><i data-lucide="bell" class="w-4"></i></button><button onclick="openAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl flex items-center gap-2"><i data-lucide="plus" class="w-4"></i><span class="hidden sm:inline">Add candidate</span></button></div></header>
 
     <div class="p-4 md:p-7 max-w-[1600px] mx-auto">
       <div class="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">Bản xem thử · Chỉ có dữ liệu minh họa. Các thao tác chưa được lưu vào ATS thật.</div>
+      <!-- Dashboard: one screen in the ATS, mapped to Hiring Request Master and Dashboard_Data_Layer. -->
+      <section id="dashboard" class="page active">
+        <div class="dash-hero">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-5"><div><p class="text-xs font-semibold text-indigo-600 uppercase tracking-widest">FireGroup Talent Operating System</p><h1 class="text-2xl font-semibold mt-1">FireGroup Talent Intelligence</h1><p class="text-sm text-slate-500 mt-1">Hiring performance, SLA health, workforce demand and risks by business unit.</p></div><div class="flex flex-wrap gap-2"><button id="dashboardLogin" class="border rounded-xl bg-white px-3 py-2 text-sm">Đăng nhập Google</button><button id="dashboardLogout" class="hidden border rounded-xl bg-white px-3 py-2 text-sm">Đăng xuất</button><button id="dashboardRefresh" class="border rounded-xl bg-white px-3 py-2 text-sm">Refresh</button></div></div>
+        <div class="card rounded-2xl p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"><div>Data source<strong class="block">Hiring Request Master</strong></div><div>Last updated<strong id="dashboardUpdated" class="block">—</strong></div><div>Selected period<strong id="dashboardPeriod" class="block">—</strong></div><div>Viewing BU<strong id="dashboardBU" class="block">All BU</strong></div></div>
+        <div class="card dash-filters rounded-2xl p-4 mb-3 flex flex-wrap gap-3"><label class="text-xs text-slate-500">Year<select id="dashboardYear" class="block mt-1 rounded-lg border p-2 text-sm"><option value="">All years</option></select></label><label class="text-xs text-slate-500">Quarter<select id="dashboardQuarter" class="block mt-1 rounded-lg border p-2 text-sm"><option value="">All quarters</option><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option></select></label><label class="text-xs text-slate-500">Month<select id="dashboardMonth" class="block mt-1 rounded-lg border p-2 text-sm"><option value="">All months</option></select></label><label class="text-xs text-slate-500">Business Unit<select id="dashboardBusinessUnit" class="block mt-1 rounded-lg border p-2 text-sm"><option value="">All Business Units</option></select></label></div>
+        </div>
+        <div id="dashboardStatus" role="status" aria-live="polite" class="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">Đang kiểm tra kết nối. Dashboard không hiển thị dữ liệu thật trước khi xác thực quyền.</div>
+        <div class="card rounded-2xl p-4 mb-5 flex flex-wrap gap-2 text-sm" id="dashboardSections" aria-label="Dashboard sections"></div>
+        <div id="dashboardPanels"></div>
+      </section>
       <!-- Candidates -->
-      <section id="candidates" class="page active">
+      <section id="candidates" class="page">
         <div class="flex flex-col md:flex-row md:items-end gap-4 justify-between mb-6"><div><h1 class="text-2xl font-semibold tracking-tight">Talent pool</h1><p class="text-sm text-slate-500 mt-1">Search and manage candidate profiles across all hiring pipelines.</p></div><div class="text-sm text-slate-500"><span class="font-semibold text-slate-900" id="candidateCount">8</span> profiles in prototype</div></div>
         <div class="card rounded-2xl overflow-hidden">
           <div class="p-4 border-b flex flex-wrap gap-2"><div class="relative flex-1 min-w-[240px]"><i data-lucide="search" class="w-4 absolute left-3 top-3 text-slate-400"></i><input id="candidateSearch" oninput="renderCandidates()" placeholder="Search name, role, skills or company..." class="w-full pl-9 pr-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"></div><select id="roleFilter" aria-label="Filter by role" onchange="renderCandidates()" class="chip rounded-xl px-3 text-sm"><option value="">All roles</option></select><select id="seniorityFilter" aria-label="Filter by seniority" onchange="renderCandidates()" class="chip rounded-xl px-3 text-sm"><option value="">Seniority</option></select><select id="locationFilter" aria-label="Filter by location" onchange="renderCandidates()" class="chip rounded-xl px-3 text-sm"><option value="">All locations</option></select><select id="sourceFilter" aria-label="Filter by source" onchange="renderCandidates()" class="chip rounded-xl px-3 text-sm"><option value="">All sources</option></select></div>
@@ -164,4 +188,5 @@ function addCandidateDemo(event){
 }
 updateCandidateFilters();renderCandidates();renderJobs();renderApplications();renderKanban();renderInterviews();lucide.createIcons();
 </script>
+<script type="module" src="./dashboard.js"></script>
 </body></html>
