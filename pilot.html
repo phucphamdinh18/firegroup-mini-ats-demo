@@ -17,7 +17,8 @@
   </style>
   <script src="./supabase/pilot-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
-  <script type="module">
+  <script>
+  document.addEventListener("DOMContentLoaded",()=>{
     const createClient=window.supabase?.createClient;
     const cfg=window.FIREGROUP_PILOT;
     const $=id=>document.getElementById(id);
@@ -118,6 +119,7 @@
       }
       refresh();
     }
+  });
   </script>
 </head>
 <body><main>
