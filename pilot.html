@@ -16,8 +16,9 @@
     @media(max-width:650px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
   </style>
   <script src="./supabase/pilot-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
   <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
+    const createClient=window.supabase?.createClient;
     const cfg=window.FIREGROUP_PILOT;
     const $=id=>document.getElementById(id);
     const error=e=>{ $('message').textContent=e?.message||String(e); $('message').className='warn'; };
@@ -27,7 +28,9 @@
       parts.forEach(p=>{const span=document.createElement('span');span.textContent=p;span.style.marginRight='12px';div.append(span)});
       container.append(div);return div;
     };
-    if(!cfg?.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT_REF') ||
+    if(!createClient){
+      info('Không tải được thư viện đăng nhập Supabase. Hãy tải lại trang hoặc kiểm tra kết nối mạng.');
+    }else if(!cfg?.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT_REF') ||
        !cfg?.publishableKey || cfg.publishableKey.includes('YOUR_PUBLISHABLE_KEY')){
       info('Cần điền URL và publishable key của dự án Supabase vào supabase/pilot-config.js trước khi thử đăng nhập.');
     }else{
