@@ -66,6 +66,34 @@ function atsMonth_(date) { return String(date.getMonth() + 1).padStart(2, '0'); 
 function atsQuarter_(date) { return 'Q' + (Math.floor(date.getMonth() / 3) + 1); }
 function atsNumber_(value) { var number = Number(value); return isFinite(number) ? number : 0; }
 function atsYes_(value) { return /^(yes|true|1|y)$/i.test(atsText_(value)); }
+function atsPeriod_(row, monthField, dateField) {
+  var value = row[monthField];
+  if (value instanceof Date && !isNaN(value.getTime()))
+    return Utilities.formatDate(value, 'Asia/Ho_Chi_Minh', 'yyyy-MM');
+  var text = atsText_(value);
+  var match = text.match(/^(20\d{2})[-/]([01]?\d)$/);
+  if (match && Number(match[2]) >= 1 && Number(match[2]) <= 12)
+    return match[1] + '-' + String(Number(match[2])).padStart(2, '0');
+  var date = atsDate_(row[dateField]);
+  return date ? Utilities.formatDate(date, 'Asia/Ho_Chi_Minh', 'yyyy-MM') : '';
+}
+function atsPeriodMatches_(period, f) {
+  if (!period) return false;
+  var month = Number(period.slice(5));
+  return (!f.year || period.slice(0, 4) === f.year) &&
+    (!f.quarter || 'Q' + Math.ceil(month / 3) === f.quarter) &&
+    (!f.month || period.slice(5) === f.month);
+}
+function atsAccepted_(row) {
+  return atsNumber_(row['Accept Offer']) > 0 || !!atsText_(row['Offer Accepted Date']) ||
+    !!atsText_(row['Actual Onboarding Date']);
+}
+function atsPaused_(row) { return /pause|cancel|on hold/i.test(atsText_(row['Current Status'])); }
+function atsOnboardPeriod_(row) {
+  return atsPeriod_(row, 'Actual Onboarding Month', 'Actual Onboarding Date') ||
+    atsPeriod_(row, 'Onboarding Month', 'Onboarding Date') ||
+    atsPeriod_(row, 'Onboard Month', 'Onboard Date');
+}
 
 function atsDashboardData_(request) {
   var f = request.filters || {};
@@ -77,52 +105,74 @@ function atsDashboardData_(request) {
     return id && (request.allJobs || allowed.has(id));
   });
   var allYears = Array.from(new Set(visible.map(function(row) {
-    var date = atsDate_(row['Requesting Date']); return date ? String(date.getFullYear()) : '';
+    return atsPeriod_(row, 'Request Month', 'Requesting Date').slice(0, 4);
   }).filter(Boolean))).sort().reverse();
   var allUnits = Array.from(new Set(visible.map(function(row) { return atsText_(row['Business Unit']); }).filter(Boolean))).sort();
-  var selected = visible.filter(function(row) {
-    var date = atsDate_(row['Requesting Date']);
-    if (f.businessUnit && atsText_(row['Business Unit']) !== f.businessUnit) return false;
-    if ((f.year || f.quarter || f.month) && !date) return false;
-    return (!f.year || String(date.getFullYear()) === f.year) &&
-      (!f.quarter || atsQuarter_(date) === f.quarter) &&
-      (!f.month || atsMonth_(date) === f.month);
+  if (!f.year) f.year = allYears[0] || '';
+  var inUnit = visible.filter(function(row) {
+    return !f.businessUnit || atsText_(row['Business Unit']) === f.businessUnit;
   });
-  var selectedIds = new Set(selected.map(function(row) { return atsText_(row['Job ID']); }));
+  // Match the existing Code.gs: each KPI uses its own event month, after access
+  // has been restricted to permitted Job IDs. Never use global aggregate rows.
+  var selected = inUnit.filter(function(row) {
+    return atsPeriodMatches_(atsPeriod_(row, 'Request Month', 'Requesting Date'), f);
+  });
+  var acceptedRows = inUnit.filter(function(row) {
+    return atsPeriodMatches_(atsPeriod_(row, 'Offer Accepted Month', 'Offer Accepted Date'), f) && atsAccepted_(row);
+  });
+  var onboardRows = inUnit.filter(function(row) {
+    return atsPeriodMatches_(atsOnboardPeriod_(row), f);
+  });
+  var pauseRows = inUnit.filter(function(row) {
+    return atsPeriodMatches_(atsPeriod_(row, '', 'Pause / Cancelled Date'), f) && atsPaused_(row);
+  });
+  var permittedIds = new Set(visible.map(function(row) { return atsText_(row['Job ID']); }));
+  var businessUnitById = {};
+  visible.forEach(function(row) { businessUnitById[atsText_(row['Job ID'])] = atsText_(row['Business Unit']); });
   var issues = atsRead_(workbook.getSheetByName('Hiring Issue Tracking'))
-    .filter(function(row) { return selectedIds.has(atsText_(row['Job ID'])) && atsYes_(row['Included in Hiring Dashboard?']); });
-  var within = 0, overdue = 0, needData = 0, paused = 0, accepted = 0, onboarded = 0;
+    .filter(function(row) {
+      return permittedIds.has(atsText_(row['Job ID'])) && atsYes_(row['Included in Hiring Dashboard?']) &&
+        (!f.businessUnit || (atsText_(row['Business Unit']) || businessUnitById[atsText_(row['Job ID'])]) === f.businessUnit) &&
+        atsPeriodMatches_(atsPeriod_(row, 'Issue Month', 'Issue Date') ||
+          atsPeriod_(row, '', 'Timestamp'), f);
+    });
+  var within = 0, overdue = 0;
   var months = {}, offersByBu = {}, slaByBu = {}, sourceCounts = {};
   selected.forEach(function(row) {
     var unit = atsText_(row['Business Unit']) || 'Unassigned';
     var status = atsText_(row['Current Status']);
-    var sla = atsText_(row['SLA Result']);
-    var date = atsDate_(row['Requesting Date']);
-    var month = date ? String(date.getFullYear()) + '-' + atsMonth_(date) : '';
-    var isPaused = /on.?hold|pause|cancel/i.test(status);
-    if (isPaused) paused++;
-    if (/within|on.?time|met/i.test(sla)) within++;
-    else if (/overdue|delay|late/i.test(sla)) overdue++;
-    else if (!isPaused) needData++;
-    if (row['Offer Accepted Date']) accepted++;
-    if (row['Actual Onboarding Date']) onboarded++;
+    var month = atsPeriod_(row, 'Request Month', 'Requesting Date');
     if (month) {
       months[month] = months[month] || { month: month, newRequests: 0, openJobs: 0 };
       months[month].newRequests++;
       if (/open/i.test(status)) months[month].openJobs++;
     }
+  });
+  acceptedRows.forEach(function(row) {
+    var unit = atsText_(row['Business Unit']) || 'Unassigned';
+    var sla = atsText_(row['SLA Result']);
+    if (sla === 'Within SLA') within++;
+    if (sla === 'Overdue') overdue++;
     offersByBu[unit] = offersByBu[unit] || { businessUnit: unit, acceptedOffers: 0, actualOnboard: 0, offerRejected: 0, cancelOffer: 0 };
-    offersByBu[unit].acceptedOffers += row['Offer Accepted Date'] ? 1 : 0;
-    offersByBu[unit].actualOnboard += row['Actual Onboarding Date'] ? 1 : 0;
+    offersByBu[unit].acceptedOffers++;
     slaByBu[unit] = slaByBu[unit] || { businessUnit: unit, withinSla: 0, overdue: 0, needData: 0, openJobs: 0 };
-    slaByBu[unit].withinSla += /within|on.?time|met/i.test(sla) ? 1 : 0;
-    slaByBu[unit].overdue += /overdue|delay|late/i.test(sla) ? 1 : 0;
-    slaByBu[unit].needData += !sla && !isPaused ? 1 : 0;
-    slaByBu[unit].openJobs += /open/i.test(status) ? 1 : 0;
-    if (row['Offer Accepted Date']) {
-      var sourceKey = atsText_(row['Source']) + '|' + atsText_(row['Sub Source']);
-      sourceCounts[sourceKey] = (sourceCounts[sourceKey] || 0) + 1;
-    }
+    slaByBu[unit].withinSla += sla === 'Within SLA' ? 1 : 0;
+    slaByBu[unit].overdue += sla === 'Overdue' ? 1 : 0;
+    slaByBu[unit].needData += sla === 'Need Data' ? 1 : 0;
+    var sourceKey = atsText_(row['Source']) + '|' + atsText_(row['Sub Source']);
+    sourceCounts[sourceKey] = (sourceCounts[sourceKey] || 0) + 1;
+  });
+  onboardRows.forEach(function(row) {
+    var unit = atsText_(row['Business Unit']) || 'Unassigned';
+    offersByBu[unit] = offersByBu[unit] || { businessUnit: unit, acceptedOffers: 0, actualOnboard: 0, offerRejected: 0, cancelOffer: 0 };
+    offersByBu[unit].actualOnboard++;
+  });
+  issues.forEach(function(row) {
+    var unit = atsText_(row['Business Unit']) || businessUnitById[atsText_(row['Job ID'])] || 'Unassigned';
+    var type = atsText_(row['Issue Type']).toLowerCase();
+    offersByBu[unit] = offersByBu[unit] || { businessUnit: unit, acceptedOffers: 0, actualOnboard: 0, offerRejected: 0, cancelOffer: 0 };
+    if (/offer rejected|rejected offer/.test(type)) offersByBu[unit].offerRejected++;
+    if (/cancel offer|cancelled offer|canceled offer/.test(type)) offersByBu[unit].cancelOffer++;
   });
   var sources = Object.keys(sourceCounts).map(function(key) {
     var parts = key.split('|'); return { source: parts[0], subSource: parts[1], acceptedOffers: sourceCounts[key], matching: '—' };
@@ -130,9 +180,9 @@ function atsDashboardData_(request) {
   return {
     generatedAt: Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd HH:mm:ss'),
     filters: { years: allYears, businessUnits: allUnits },
-    kpis: { newRequests: selected.length, acceptedOffers: accepted,
-      slaHealth: within + overdue ? Math.round(within * 100 / (within + overdue)) + '%' : '—',
-      pausedCancelled: paused, topSubSource: sources.length ? sources[0].subSource : '—', hiringIssues: issues.length },
+    kpis: { newRequests: selected.length, acceptedOffers: acceptedRows.length,
+      slaHealth: within + overdue ? Math.round(within * 100 / (within + overdue)) + '%' : '100%',
+      pausedCancelled: pauseRows.length, topSubSource: sources.length ? sources[0].subSource : '—', hiringIssues: issues.length },
     comparison: [], monthly: Object.keys(months).sort().map(function(key) { return months[key]; }),
     offersByBu: Object.keys(offersByBu).sort().map(function(key) { return offersByBu[key]; }),
     slaByBu: Object.keys(slaByBu).sort().map(function(key) { return slaByBu[key]; }),
