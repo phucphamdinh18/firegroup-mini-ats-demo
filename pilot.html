@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FireGroup ATS · Thử đăng nhập và phân quyền</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}
+    main{max-width:980px;margin:auto;padding:32px 18px}header,.row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .box{background:white;border:1px solid #dfe4ee;border-radius:14px;padding:20px;margin:18px 0}
+    button,select,input{font:inherit;padding:8px 12px;border:1px solid #cbd5e1;border-radius:9px}
+    button{cursor:pointer;background:#3730a3;color:white;border:0}button.ghost{background:#f1f5f9;color:#172033}
+    button:disabled{opacity:.5;cursor:default}.notice{color:#475569}.warn{color:#9a3412}
+    .hidden{display:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .item{border-top:1px solid #e5e7eb;padding:12px 0}.stack{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    @media(max-width:650px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
+  </style>
+  <script src="./supabase/pilot-config.js"></script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
+    const cfg=window.FIREGROUP_PILOT;
+    const $=id=>document.getElementById(id);
+    const error=e=>{ $('message').textContent=e?.message||String(e); $('message').className='warn'; };
+    const info=s=>{ $('message').textContent=s; $('message').className='notice'; };
+    const item=(container,parts)=>{
+      const div=document.createElement('div');div.className='item';
+      parts.forEach(p=>{const span=document.createElement('span');span.textContent=p;span.style.marginRight='12px';div.append(span)});
+      container.append(div);return div;
+    };
+    if(!cfg?.supabaseUrl || cfg.supabaseUrl.includes('YOUR_PROJECT_REF') ||
+       !cfg?.publishableKey || cfg.publishableKey.includes('YOUR_PUBLISHABLE_KEY')){
+      info('Cần điền URL và publishable key của dự án Supabase vào supabase/pilot-config.js trước khi thử đăng nhập.');
+    }else{
+      const supabase=createClient(cfg.supabaseUrl,cfg.publishableKey);
+      $('login').onclick=async()=>{
+        const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0].split('?')[0]}});
+        if(e)error(e);
+      };
+      $('logout').onclick=async()=>{await supabase.auth.signOut();location.reload()};
+      $('reload').onclick=async()=>refresh();
+      async function refresh(){
+        try{
+          const {data:{user},error:authError}=await supabase.auth.getUser();
+          if(authError || !user){$('loggedOut').classList.remove('hidden');$('loggedIn').classList.add('hidden');return}
+          $('loggedOut').classList.add('hidden');$('loggedIn').classList.remove('hidden');
+          $('who').textContent=user.email||'Tài khoản chưa có email';
+          const {data:found,error:readError}=await supabase.from('pilot_users').select('user_id,email,role,active').eq('user_id',user.id).maybeSingle();
+          if(readError)throw readError;
+          if(!found){
+            const {error:registerError}=await supabase.from('pilot_users').insert({user_id:user.id,email:user.email.toLowerCase()});
+            if(registerError)throw registerError;
+            info('Đã ghi nhận tài khoản. Admin cần duyệt quyền trước khi xem dữ liệu thử.');
+          }
+          const {data:profile,error:profileError}=await supabase.from('pilot_users').select('user_id,email,role,active').eq('user_id',user.id).single();
+          if(profileError)throw profileError;
+          $('role').textContent=profile.active?`Vai trò: ${profile.role}`:'Đang chờ admin cấp quyền';
+          $('candidateList').replaceChildren();$('accessList').replaceChildren();
+          $('admin').classList.toggle('hidden',!(profile.active&&profile.role==='admin'));
+          if(!profile.active)return;
+          const [{data:candidates,error:ce},{data:jobs,error:je}]=await Promise.all([
+            supabase.from('pilot_candidates').select('candidate_id,job_id,name,role_name,stage').order('candidate_id'),
+            supabase.from('pilot_job_access').select('job_id').eq('user_id',user.id).order('job_id')
+          ]);
+          if(ce||je)throw ce||je;
+          $('accessSummary').textContent=profile.role==='admin'?'Admin xem tất cả Job ID':`Job được cấp: ${(jobs||[]).map(x=>x.job_id).join(', ')||'chưa có'}`;
+          (candidates||[]).forEach(c=>item($('candidateList'),[c.candidate_id,c.name,c.role_name,c.job_id,c.stage]));
+          if(!candidates?.length)item($('candidateList'),['Không có ứng viên thử nào thuộc job bạn được xem.']);
+          if(profile.role==='admin')await loadAdmin(supabase,user.id);
+          info('Chỉ hiển thị ứng viên giả. Supabase kiểm tra quyền ngay khi truy vấn dữ liệu.');
+        }catch(e){error(e)}
+      }
+      async function loadAdmin(db,selfId){
+        const [{data:users,error:ue},{data:access,error:ae}]=await Promise.all([
+          db.from('pilot_users').select('user_id,email,role,active').order('email'),
+          db.from('pilot_job_access').select('user_id,job_id').order('job_id')
+        ]);
+        if(ue||ae)throw ue||ae;
+        const select=$('userToGrant');select.replaceChildren();
+        (users||[]).forEach(u=>{
+          select.add(new Option(`${u.email} · ${u.active?u.role:'chưa duyệt'}`,u.user_id));
+          const row=item($('accessList'),[u.email,u.active?u.role:'chưa duyệt',
+            (access||[]).filter(a=>a.user_id===u.user_id).map(a=>a.job_id).join(', ')||'chưa có job']);
+          if(u.user_id!==selfId){
+            const approve=document.createElement('button');approve.textContent=u.active?'Khóa tài khoản':'Duyệt tài khoản';
+            approve.onclick=async()=>{
+              const role=u.active?u.role:$('newRole').value;
+              const {error:e}=await db.from('pilot_users').update({active:!u.active,role}).eq('user_id',u.user_id);
+              if(e)error(e);else refresh();
+            };row.append(approve);
+            if(u.active){
+              const rolePicker=document.createElement('select');
+              rolePicker.setAttribute('aria-label',`Vai trò của ${u.email}`);
+              ['recruiter','hiring_manager','interviewer','admin'].forEach(role=>rolePicker.add(new Option(role,role)));
+              rolePicker.value=u.role;row.append(rolePicker);
+              const saveRole=document.createElement('button');saveRole.textContent='Lưu vai trò';
+              saveRole.onclick=async()=>{
+                const {error:e}=await db.from('pilot_users').update({role:rolePicker.value}).eq('user_id',u.user_id);
+                if(e)error(e);else refresh();
+              };row.append(saveRole);
+            }
+          }
+        });
+        $('grant').onclick=async()=>{
+          const userId=select.value,jobId=$('jobId').value.trim().toUpperCase();
+          if(!/^[A-Z0-9-]{2,32}$/.test(jobId)){error('Job ID chỉ gồm chữ in hoa, số và dấu gạch ngang.');return}
+          const {error:e}=await db.from('pilot_job_access').insert({user_id:userId,job_id:jobId});
+          if(e)error(e);else refresh();
+        };
+        $('revoke').onclick=async()=>{
+          const userId=select.value,jobId=$('jobId').value.trim().toUpperCase();
+          if(!jobId)return error('Nhập Job ID cần thu hồi.');
+          const {error:e}=await db.from('pilot_job_access').delete().eq('user_id',userId).eq('job_id',jobId);
+          if(e)error(e);else refresh();
+        };
+      }
+      refresh();
+    }
+  </script>
+</head>
+<body><main>
+  <header><div><h1>FireGroup · Kiểm tra đăng nhập và quyền</h1><p class="notice">Trang thử riêng · Chỉ dùng tên ứng viên giả · Không liên kết ATS production</p></div><a href="./index.html">Về bản giao diện ATS</a></header>
+  <div class="box"><p id="message" class="notice">Đang khởi tạo…</p>
+    <div id="loggedOut"><button id="login">Đăng nhập bằng Google</button></div>
+    <div id="loggedIn" class="hidden"><div class="row"><div><strong id="who"></strong><p id="role"></p></div><div class="stack"><button id="reload" class="ghost">Tải lại</button><button id="logout" class="ghost">Đăng xuất</button></div></div></div>
+  </div>
+  <section class="box"><h2>Ứng viên giả theo quyền</h2><p id="accessSummary" class="notice"></p><div id="candidateList"></div></section>
+  <section class="box hidden" id="admin"><h2>Admin cấp quyền thử</h2><p class="notice">Người dùng đăng nhập lần đầu sẽ xuất hiện ở đây để admin duyệt.</p>
+    <div class="grid"><select id="userToGrant" aria-label="Chọn người dùng"></select><select id="newRole" aria-label="Vai trò"><option value="recruiter">Recruiter</option><option value="hiring_manager">Hiring Manager</option><option value="interviewer">Interviewer</option></select></div>
+    <div class="stack" style="margin-top:12px"><input id="jobId" placeholder="Job ID, ví dụ FG-1024" aria-label="Job ID"><button id="grant">Gán job</button><button id="revoke" class="ghost">Thu hồi job</button></div>
+    <div id="accessList" style="margin-top:15px"></div>
+  </section>
+</main></body>
+</html>
