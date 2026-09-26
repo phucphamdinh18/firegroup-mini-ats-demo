@@ -17,8 +17,22 @@
   </style>
   <script src="./supabase/pilot-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0"></script>
-  <script>
-  document.addEventListener("DOMContentLoaded",()=>{
+
+</head>
+<body><main>
+  <header><div><h1>FireGroup · Kiểm tra đăng nhập và quyền</h1><p class="notice">Trang thử riêng · Chỉ dùng tên ứng viên giả · Không liên kết ATS production</p></div><a href="./index.html">Về bản giao diện ATS</a></header>
+  <div class="box"><p id="message" class="notice">Đang khởi tạo…</p>
+    <div id="loggedOut"><button id="login">Đăng nhập bằng Google</button></div>
+    <div id="loggedIn" class="hidden"><div class="row"><div><strong id="who"></strong><p id="role"></p></div><div class="stack"><button id="reload" class="ghost">Tải lại</button><button id="logout" class="ghost">Đăng xuất</button></div></div></div>
+  </div>
+  <section class="box"><h2>Ứng viên giả theo quyền</h2><p id="accessSummary" class="notice"></p><div id="candidateList"></div></section>
+  <section class="box hidden" id="admin"><h2>Admin cấp quyền thử</h2><p class="notice">Người dùng đăng nhập lần đầu sẽ xuất hiện ở đây để admin duyệt.</p>
+    <div class="grid"><select id="userToGrant" aria-label="Chọn người dùng"></select><select id="newRole" aria-label="Vai trò"><option value="recruiter">Recruiter</option><option value="hiring_manager">Hiring Manager</option><option value="interviewer">Interviewer</option></select></div>
+    <div class="stack" style="margin-top:12px"><input id="jobId" placeholder="Job ID, ví dụ FG-1024" aria-label="Job ID"><button id="grant">Gán job</button><button id="revoke" class="ghost">Thu hồi job</button></div>
+    <div id="accessList" style="margin-top:15px"></div>
+  </section>
+</main>
+<script>
     const createClient=window.supabase?.createClient;
     const cfg=window.FIREGROUP_PILOT;
     const $=id=>document.getElementById(id);
@@ -119,20 +133,6 @@
       }
       refresh();
     }
-  });
-  </script>
-</head>
-<body><main>
-  <header><div><h1>FireGroup · Kiểm tra đăng nhập và quyền</h1><p class="notice">Trang thử riêng · Chỉ dùng tên ứng viên giả · Không liên kết ATS production</p></div><a href="./index.html">Về bản giao diện ATS</a></header>
-  <div class="box"><p id="message" class="notice">Đang khởi tạo…</p>
-    <div id="loggedOut"><button id="login">Đăng nhập bằng Google</button></div>
-    <div id="loggedIn" class="hidden"><div class="row"><div><strong id="who"></strong><p id="role"></p></div><div class="stack"><button id="reload" class="ghost">Tải lại</button><button id="logout" class="ghost">Đăng xuất</button></div></div></div>
-  </div>
-  <section class="box"><h2>Ứng viên giả theo quyền</h2><p id="accessSummary" class="notice"></p><div id="candidateList"></div></section>
-  <section class="box hidden" id="admin"><h2>Admin cấp quyền thử</h2><p class="notice">Người dùng đăng nhập lần đầu sẽ xuất hiện ở đây để admin duyệt.</p>
-    <div class="grid"><select id="userToGrant" aria-label="Chọn người dùng"></select><select id="newRole" aria-label="Vai trò"><option value="recruiter">Recruiter</option><option value="hiring_manager">Hiring Manager</option><option value="interviewer">Interviewer</option></select></div>
-    <div class="stack" style="margin-top:12px"><input id="jobId" placeholder="Job ID, ví dụ FG-1024" aria-label="Job ID"><button id="grant">Gán job</button><button id="revoke" class="ghost">Thu hồi job</button></div>
-    <div id="accessList" style="margin-top:15px"></div>
-  </section>
-</main></body>
+</script>
+</body>
 </html>
