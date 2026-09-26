@@ -25,15 +25,15 @@ The Edge Function obtains allowed Job IDs from Supabase RLS. The browser cannot 
 - `supabase/functions/ats-dashboard/index.ts`: verifies a Supabase session and role, reads allowed Job IDs, signs the gateway request.
 - `appscript/ATS_DashboardGateway.gs`: a **new standalone** Apps Script web app source for read-only Dashboard data. This does not replace production `Code.gs`, `doGet`, `Index.html`, or triggers.
 
-The GitHub PR stays in draft. The public Pages site does not yet have this UI. A signed-in Supabase account, active pilot tables, a deployed Edge Function and Apps Script gateway are all required before live Sheet data can appear. Until then, all Dashboard KPIs show `—`; other ATS demo sections still use fictional records.
+The GitHub PR stays in draft. The public Pages site currently has only the isolated `pilot.html` login test; this unified Dashboard UI is still on the draft branch. A signed-in Supabase account, active pilot tables, a deployed Edge Function and Apps Script gateway are all required before live Sheet data can appear. Until then, all Dashboard KPIs show `—`; other ATS demo sections still use fictional records.
 
 ## Before connecting real data
 
-1. Configure Supabase Google Auth and `pilot-schema.sql` from `supabase/PILOT.md`. Admin must approve accounts and their Job IDs.
+1. Google Auth, redirect URL and `pilot-schema.sql` are configured. The first admin account is active. Validate Job ID scoping with a second test account before using real data.
 2. Review the existing Dashboard calculations and reconcile all metrics, especially `SLA Health`, historical comparison, snapshots, source matching, and offer outcomes. Do not treat draft calculations as identical to the current production Dashboard.
 3. Create a **separate** Apps Script project with `appscript/ATS_DashboardGateway.gs`, bind its read access to the existing FireGroup Sheet, and deploy as a web app executing as its owner. Only the HMAC-verified handler reads data; use a long random `ATS_BRIDGE_SECRET` Script Property. A public URL without this check would expose HR data.
 4. Set the same secret in Supabase Edge Function secrets as `ATS_BRIDGE_SECRET`, plus the new web app URL as `ATS_APPS_SCRIPT_URL`. Deploy `ats-dashboard` with user JWT verification enabled. Never place either secret in GitHub Pages or a GitHub commit.
 5. Set Supabase Auth's Site URL and redirect allow list to the GitHub Pages `index.html` page. Test two Google accounts: admin and a single-job interviewer. Check that unassigned jobs and their aggregates never appear. Then test revoke/lock, errors, and refresh.
 6. Only after the UI, security checks, metrics, and nonproduction tests pass, merge the PR and switch users from the existing Dashboard URL. Keep the original dashboard available while comparing results.
 
-No production Sheet, Apps Script files, triggers or Supabase settings have been changed by this PR.
+The isolated Supabase pilot now contains an admin account and test tables. Production Sheet, Apps Script files and triggers remain unchanged.
